@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-wheel-metadata/
+.installed.cfg
+*.egg-info/
+
+# Data
+data/
+
+# Models
+models/
+
+# Notebooks
+notebooks/
+
+# OS-specific
+.DS_Store
+
+# Generated files
+prediction_vs_actual.png

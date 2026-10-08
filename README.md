@@ -1,163 +1,71 @@
-# Energy Demand Forecasting
+# Energy demand forecasting
 
-## Project Description
+An LSTM that forecasts next-hour household electricity demand from the previous 24 hours, with a FastAPI service and a React dashboard that plots predictions against actual demand as the data streams in.
 
-This project implements an LSTM-based energy demand forecasting system using household power consumption data. The system includes:
+**Data:** [UCI Individual Household Electric Power Consumption](https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption) (one house in France, minute-level readings, 2006–2010). It's resampled to hourly means, gaps are forward-filled, and the target is `Global_active_power` (kW).
 
-- **Data Processing**: Downloads and preprocesses household power consumption data from UCI ML Repository
-- **LSTM Model**: Deep learning model for time series forecasting
-- **Web Dashboard**: Real-time visualization of predictions vs actual values
-- **REST API**: FastAPI-based API for model predictions
+## How it works
 
-The model predicts the next hour's energy demand based on the previous 24 hours of data.
-
-## Features
-
-- ✅ Automated data download and preprocessing
-- ✅ LSTM neural network for time series forecasting
-- ✅ Real-time web dashboard with interactive charts
-- ✅ REST API for model predictions
-- ✅ Model performance evaluation and visualization
-- ✅ Error handling and data validation
-
-## Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd Energy_Demand_Forecasting
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the complete project**:
-   ```bash
-   python run_complete_project.py
-   ```
-
-## Usage
-
-### Quick Start
-
-Run the complete project setup:
-```bash
-python run_complete_project.py
+```
+download_data.py ──► hourly resample + forward fill ──► SQLite / CSV
+                                                          │
+train_lstm.py ──► MinMax scaling ──► 24-hour windows ──► 2 × LSTM(50) + dropout ──► models/lstm_model.h5
+                                                          │
+src/api/main.py (FastAPI) ──► /predict, /get_initial_data, /get_next_actual
+                                                          │
+frontend/ (React + TypeScript + Vite) and src/dashboard/ ──► live actual-vs-predicted chart
 ```
 
-This will:
-1. Download and preprocess the data (if not already done)
-2. Train the LSTM model (if not already trained)
-3. Optionally verify model performance
-4. Start the web dashboard server
+- **Split:** chronological 80/20, with no shuffling across time.
+- **Training:** Adam on MSE, batch size 64, up to 50 epochs with early stopping (patience 10).
+- **Evaluation:** `run_complete_project.py` reports MAE and RMSE in kW on the held-out final 20% and saves an actual-vs-predicted plot.
 
-### Individual Components
+## Run it
 
-#### Data Preprocessing
+```bash
+git clone https://github.com/kpavan27/energy-demand-forecasting.git
+cd energy-demand-forecasting
+pip install -r requirements.txt
+python run_complete_project.py   # download → preprocess → train (if needed) → evaluate → start API on :8000
+```
+
+To run the React dashboard:
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Or run the pieces one at a time:
+
 ```bash
 python src/data_preprocessing/download_data.py
-```
-
-#### Model Training
-```bash
 python src/model/train_lstm.py
-```
-
-#### Model Verification
-```bash
 python verify_model.py
+uvicorn src.api.main:app --port 8000
 ```
 
-#### Start API Server
-```bash
-python src/api/main.py
-# or
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000
-```
+### API
 
-### Web Dashboard
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/predict` | Body `{"sequence": [24 hourly values in kW]}` → next-hour prediction |
+| `GET` | `/get_initial_data` | First 24 hours, used to seed the dashboard |
+| `GET` | `/get_next_actual` | Next actual value, for comparison |
 
-Once the server is running, access the dashboard at:
-- **URL**: http://localhost:8000
-- **Features**: Real-time energy demand forecasting with interactive charts
-
-### API Endpoints
-
-- `GET /` - Web dashboard
-- `POST /predict` - Get energy demand prediction
-- `GET /get_initial_data` - Get initial 24 hours of data
-- `GET /get_next_actual` - Get next actual value for comparison
-
-#### Example API Usage
-
-```python
-import requests
-
-# Get prediction
-response = requests.post('http://localhost:8000/predict', 
-                        json={'sequence': [1.2, 1.5, 1.3, ...]})  # 24 values
-prediction = response.json()['prediction']
-```
-
-## Project Structure
+## Project layout
 
 ```
-Energy_Demand_Forecasting/
-├── data/
-│   ├── raw/                           # Raw dataset
-│   └── processed/                     # Preprocessed data
-├── models/
-│   ├── lstm_model.h5                 # Trained LSTM model
-│   └── scaler.pkl                    # Data scaler
-├── src/
-│   ├── api/                          # FastAPI application
-│   ├── dashboard/                    # Web dashboard files
-│   ├── data_preprocessing/           # Data processing scripts
-│   └── model/                        # Model training scripts
-├── notebooks/                        # Jupyter notebooks
-├── run_complete_project.py           # Main execution script
-├── verify_model.py                   # Model verification script
-└── requirements.txt                  # Python dependencies
+src/data_preprocessing/   download, resample and store the data
+src/model/                LSTM training
+src/api/                  FastAPI service
+src/dashboard/            lightweight HTML/JS dashboard served by the API
+frontend/                 React + TypeScript dashboard
+config.py                 window length, split, epochs and other settings
+verify_model.py           standalone evaluation
 ```
 
-## Model Performance
+## Known limitations and next steps
 
-The LSTM model is evaluated using:
-- **Mean Absolute Error (MAE)**: Average absolute difference between predicted and actual values
-- **Root Mean Squared Error (RMSE)**: Square root of average squared differences
-
-## Requirements
-
-- Python 3.8+
-- TensorFlow 2.19.0+
-- Pandas 2.0.0+
-- FastAPI 0.104.0+
-- See `requirements.txt` for complete list
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Model files not found**: Run the training script first
-2. **Data files not found**: Run the data preprocessing script first
-3. **Port already in use**: Change the port in the server configuration
-
-### Error Messages
-
-- `Model or scaler not loaded`: Ensure model files exist in the `models/` directory
-- `Sequence must have 24 data points`: Provide exactly 24 values for prediction
-- `Processed data file not found`: Run data preprocessing first
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is open source and available under the MIT License.
+- Early stopping currently monitors the test split, and the scaler is fit on the full series. Both leak a little information from the test period, so the reported test error is slightly optimistic. The fix is a separate validation split, with the scaler fit on training data only.
+- Report the LSTM against a persistence baseline (next hour = this hour) and a seasonal baseline (same hour yesterday). An hourly forecaster only adds value if it beats those.
+- Add calendar features (hour, weekday) and test multi-step horizons.
